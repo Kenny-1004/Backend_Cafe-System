@@ -1,0 +1,272 @@
+# =====================================================================
+# Campus Café API — manual tests (VS Code "REST Client" extension)
+# Click "Send Request" above any request. REST Client keeps cookies,
+# so after a sign-in the following staff requests are authenticated.
+#
+# Before running: npm run dev  (dev password for all seed accounts: cafe12345)
+# Product ids are from your database; change them if a request says
+# PRODUCT_UNAVAILABLE (run "Menu" to see ids).
+# =====================================================================
+
+@baseUrl = http://localhost:5006
+@api = {{baseUrl}}/api/v1
+
+@preparedProductId = 59
+@readyMadeProductId = 288
+@idempotencyKey = 3b1f6c2e-9a4d-4c1b-8f7e-0d2a5b6c7e81
+
+
+# =====================================================================
+# Health
+# =====================================================================
+
+### Liveness
+GET {{baseUrl}}/healthz
+
+### Readiness: database, realtime connection, stock ledger consistency
+GET {{baseUrl}}/readyz
+
+
+# =====================================================================
+# Kiosk (paired tablets only; a signed-in manager can preview)
+# =====================================================================
+
+### Without a paired device -> 401 KIOSK_NOT_PAIRED
+GET {{api}}/menu
+
+### Sign in as manager: the kiosk requests below then work as a preview
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "username": "admin", "password": "cafe12345" }
+
+### Menu grouped by category, with isAvailable
+GET {{api}}/menu
+
+### Place an order -> 201 + receipt with publicId
+# @name placeOrder
+POST {{api}}/orders
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}
+
+{
+  "serviceType": "take_out",
+  "items": [
+    { "productId": {{preparedProductId}}, "quantity": 2, "notes": "less ice" },
+    { "productId": {{readyMadeProductId}}, "quantity": 1 }
+  ]
+}
+
+### Retry with the SAME Idempotency-Key -> the same order, never a duplicate
+POST {{api}}/orders
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}
+
+{ "items": [{ "productId": {{preparedProductId}}, "quantity": 5 }] }
+
+### Receipt by publicId (send "Place an order" first)
+GET {{api}}/orders/{{placeOrder.response.body.data.publicId}}
+
+### Unknown order -> 404
+GET {{api}}/orders/{{$guid}}
+
+### Missing Idempotency-Key -> 400
+POST {{api}}/orders
+Content-Type: application/json
+
+{ "items": [{ "productId": {{preparedProductId}}, "quantity": 1 }] }
+
+### Client-sent prices are rejected -> 400
+POST {{api}}/orders
+Content-Type: application/json
+Idempotency-Key: {{$guid}}
+
+{ "items": [{ "productId": {{preparedProductId}}, "quantity": 1, "price": "0.01" }], "total": "0.01" }
+
+
+# =====================================================================
+# Staff sign-in
+# =====================================================================
+
+### Wrong password -> 401 INVALID_CREDENTIALS
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "username": "cashier1", "password": "wrong" }
+
+### Sign in as cashier (sets httpOnly cookies)
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "username": "cashier1", "password": "cafe12345" }
+
+### Who am I? (200 with staff: null when signed out)
+GET {{api}}/auth/session
+
+
+# =====================================================================
+# Cashier (signed in as cashier1)
+# =====================================================================
+
+### Today's unpaid orders
+GET {{api}}/cashier/orders?status=unpaid
+
+### Look up the order the customer names
+# @name lookup
+GET {{api}}/cashier/orders/by-number/{{placeOrder.response.body.data.orderNumber}}
+
+### Too little cash -> 422 INSUFFICIENT_CASH
+POST {{api}}/cashier/orders/{{lookup.response.body.data.id}}/payment
+Content-Type: application/json
+
+{ "customerName": "Kent", "cashTendered": "1.00" }
+
+### Pay in cash -> status pending, returns the change
+POST {{api}}/cashier/orders/{{lookup.response.body.data.id}}/payment
+Content-Type: application/json
+
+{ "customerName": "Kent", "cashTendered": "1000" }
+
+### Paying twice -> 409 INVALID_STATE
+POST {{api}}/cashier/orders/{{lookup.response.body.data.id}}/payment
+Content-Type: application/json
+
+{ "customerName": "Kent", "cashTendered": "1000" }
+
+### Today's totals for this cashier
+GET {{api}}/cashier/summary
+
+
+# =====================================================================
+# Orders board (cashier or barista)
+# =====================================================================
+
+### Pending + serving cards
+GET {{api}}/board
+
+### Done -> serving (the kiosk shows "ready")
+POST {{api}}/board/orders/{{lookup.response.body.data.id}}/serve
+
+### Picked up -> completed (a second call clears 0)
+POST {{api}}/board/orders/complete
+Content-Type: application/json
+
+{ "orderIds": [{{lookup.response.body.data.id}}] }
+
+### Cashiers cannot open the back office -> 403
+GET {{api}}/admin/dashboard
+
+
+# =====================================================================
+# Back office (sign in as admin)
+# =====================================================================
+
+### Sign in as admin
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "username": "admin", "password": "cafe12345" }
+
+### Dashboard
+GET {{api}}/admin/dashboard
+
+### Order history with filters and keyset paging
+GET {{api}}/admin/orders?limit=10
+
+### One order: items, payment, audit timeline
+GET {{api}}/admin/orders/{{lookup.response.body.data.id}}
+
+### Products (search + filters)
+GET {{api}}/admin/products?search=latte&status=active
+
+### Product with its recipe
+GET {{api}}/admin/products/{{preparedProductId}}
+
+### Change a price (orders already placed keep their price)
+PATCH {{api}}/admin/products/{{readyMadeProductId}}
+Content-Type: application/json
+
+{ "price": "145.00" }
+
+### Ingredients (status: all | active | inactive | low)
+GET {{api}}/admin/ingredients?status=low
+
+### Low-stock alerts
+GET {{api}}/admin/stock/low
+
+### Restock an ingredient (id 1 = first ingredient)
+POST {{api}}/admin/ingredients/1/movements
+Content-Type: application/json
+
+{ "type": "restock", "quantity": "500", "note": "bought at the market" }
+
+### Adjustment without a note -> 400
+POST {{api}}/admin/ingredients/1/movements
+Content-Type: application/json
+
+{ "type": "adjustment", "quantity": "-10" }
+
+### Stock history of an ingredient
+GET {{api}}/admin/ingredients/1/movements?limit=10
+
+### Suppliers
+GET {{api}}/admin/suppliers
+
+### Create a delivery (supplier 1)
+# @name delivery
+POST {{api}}/admin/deliveries
+Content-Type: application/json
+
+{
+  "supplierId": 1,
+  "expectedAt": "2026-10-01",
+  "notes": "weekly order",
+  "items": [{ "ingredientId": 1, "quantity": "1000", "unitCost": "1.20" }]
+}
+
+### Receive it: what actually arrived goes into stock
+POST {{api}}/admin/deliveries/{{delivery.response.body.data.id}}/receive
+Content-Type: application/json
+
+{ "received": [{ "ingredientId": 1, "quantityReceived": "900" }] }
+
+### Staff accounts
+GET {{api}}/admin/employees
+
+### Reports
+GET {{api}}/admin/reports/daily-sales
+
+###
+GET {{api}}/admin/reports/best-sellers?limit=5
+
+# =====================================================================
+# Kiosk tablets (signed in as admin)
+# =====================================================================
+
+### Register a tablet -> one-time pairingCode (valid 15 minutes)
+# @name kiosk
+POST {{api}}/admin/kiosks
+Content-Type: application/json
+
+{ "name": "Kiosk 1 - entrance" }
+
+### Pair with the code (on the tablet this sets the httpOnly cafe_kiosk cookie)
+POST {{api}}/kiosk/pair
+Content-Type: application/json
+
+{ "code": "{{kiosk.response.body.data.pairingCode}}" }
+
+### Which kiosk is this?
+GET {{api}}/kiosk/session
+
+### All kiosks with status and last seen
+GET {{api}}/admin/kiosks
+
+### Deactivate (the tablet is locked out at once)
+PATCH {{api}}/admin/kiosks/{{kiosk.response.body.data.kiosk.id}}
+Content-Type: application/json
+
+{ "isActive": false }
+
+### Sign out
+POST {{api}}/auth/logout

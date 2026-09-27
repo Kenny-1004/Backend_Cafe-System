@@ -7,12 +7,12 @@ import notFound from '@/middlewares/notFound'
 import errorHandler from '@/middlewares/errorHandler'
 import healthRoutes from '@/modules/health/health.routes'
 import routes from '@/routes'
-import { isProduction, isTest } from '@/config/env'
+import env, { isProduction, isTest } from '@/config/env'
 
 const app = express()
 
 app.disable('x-powered-by')
-app.set('trust proxy', 'loopback') // behind the Vite dev proxy / Nginx on the same host
+app.set('trust proxy', env.TRUST_PROXY) // default: the Vite dev proxy / Nginx on the same host
 
 app.use(requestId)
 morgan.token('id', (req) => (req as express.Request).requestId)

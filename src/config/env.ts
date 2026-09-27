@@ -30,6 +30,8 @@ const env = {
   LOGIN_RATE_LIMIT: Number(process.env.LOGIN_RATE_LIMIT ?? 5),
   // Max kiosk orders per minute per client IP
   ORDER_RATE_LIMIT: Number(process.env.ORDER_RATE_LIMIT ?? 20),
+  // Express 'trust proxy': a hop count (e.g. 2 behind Vercel + Render) or an address list
+  TRUST_PROXY: /^\d+$/.test(process.env.TRUST_PROXY ?? '') ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY || 'loopback',
 }
 
 export const isProduction = env.NODE_ENV === 'production'

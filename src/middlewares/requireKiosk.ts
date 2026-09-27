@@ -5,8 +5,10 @@ import { hashToken } from '@/modules/auth/auth.tokens'
 import kioskDeviceRepository from '@/modules/kiosk/kioskDevice.repository'
 import { KIOSK_COOKIE } from '@/modules/kiosk/kioskDevice.tokens'
 import { resolveStaff } from '@/middlewares/authenticate'
+import env from '@/config/env'
 
-// Kiosk endpoints: a paired tablet (device cookie), or a signed-in manager previewing the kiosk.
+// Kiosk endpoints: a paired tablet (device cookie), a signed-in manager previewing the kiosk,
+// or, with PUBLIC_KIOSK, anyone ordering from their own phone (id 0: no device).
 export async function resolveKiosk(req: Request) {
   const token = req.cookies?.[KIOSK_COOKIE]
   if (typeof token === 'string' && token) {
@@ -18,6 +20,7 @@ export async function resolveKiosk(req: Request) {
   }
   const staff = await resolveStaff(req)
   if (staff?.role === 'admin') return { id: 0, name: 'Manager preview', preview: true }
+  if (env.PUBLIC_KIOSK) return { id: 0, name: 'Online ordering', preview: false }
   return null
 }
 

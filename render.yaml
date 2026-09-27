@@ -23,6 +23,8 @@ services:
         value: production
       - key: NODE_VERSION
         value: "22"
+      - key: PUBLIC_KIOSK
+        value: "true" # customers order from /kiosk on their own phones
       - key: TRUST_PROXY
         value: "2" # browser → Vercel → Render's load balancer → API
       - key: DATABASE_URL

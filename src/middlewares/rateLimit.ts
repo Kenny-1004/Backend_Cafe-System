@@ -22,11 +22,12 @@ export const loginRateLimit = rateLimit({
   handler: tooMany('Too many sign-in attempts. Please wait a minute and try again.'),
 })
 
-// Kiosk order placement per paired device (design: ~10/min per device, with headroom)
+// Kiosk order placement per paired device (design: ~10/min per device, with headroom);
+// previews and public (unpaired) phones have no device, so they are limited per IP
 export const placeOrderRateLimit = rateLimit({
   windowMs: 60_000,
   limit: env.ORDER_RATE_LIMIT,
-  keyGenerator: (req) => (req.kiosk && !req.kiosk.preview ? `kiosk:${req.kiosk.id}` : ipKeyGenerator(req.ip ?? '')),
+  keyGenerator: (req) => (req.kiosk && req.kiosk.id > 0 ? `kiosk:${req.kiosk.id}` : ipKeyGenerator(req.ip ?? '')),
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   handler: tooMany('Too many orders from this kiosk. Please wait a moment.'),

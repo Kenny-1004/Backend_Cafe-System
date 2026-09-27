@@ -1,5 +1,14 @@
 # Render Blueprint: Dashboard → New → Blueprint → pick this repo.
-# The database is external (see DEPLOY.md); secrets marked sync: false are entered in the dashboard.
+# Creates the free Postgres database and the API. After the first deploy, run the migrations
+# and switch DATABASE_URL to the restricted cafe_api login (see README: Database roles).
+databases:
+  - name: cafe-db
+    databaseName: cafe
+    user: cafe_owner
+    plan: free
+    region: singapore
+    postgresMajorVersion: "16"
+
 services:
   - type: web
     name: cafe-system-api
@@ -17,6 +26,8 @@ services:
       - key: TRUST_PROXY
         value: "2" # browser → Vercel → Render's load balancer → API
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: cafe-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true

@@ -153,6 +153,9 @@ Content-Type: application/json
 
 { "orderIds": [{{lookup.response.body.data.id}}] }
 
+### Public order display (no sign-in): preparing + ready, first names only
+GET {{api}}/display
+
 ### Cashiers cannot open the back office -> 403
 GET {{api}}/admin/dashboard
 

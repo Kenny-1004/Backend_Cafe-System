@@ -8,8 +8,10 @@ if (existsSync('.env')) process.loadEnvFile('.env')
 
 function testDatabaseUrl() {
   if (process.env.TEST_DATABASE_URL) return process.env.TEST_DATABASE_URL
-  if (!process.env.DATABASE_URL) throw new Error('Set TEST_DATABASE_URL or DATABASE_URL to run the tests')
-  const url = new URL(process.env.DATABASE_URL)
+  // Creating the test database needs the owner login, not the API's restricted one
+  const base = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL
+  if (!base) throw new Error('Set TEST_DATABASE_URL, MIGRATION_DATABASE_URL or DATABASE_URL to run the tests')
+  const url = new URL(base)
   url.pathname = `${url.pathname.replace(/^\//, '').replace(/_test$/, '')}_test`
   return url.toString()
 }

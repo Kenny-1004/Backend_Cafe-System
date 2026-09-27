@@ -21,7 +21,8 @@ Sign in at **http://localhost:5173/staff/login**. Each role lands on its own scr
   (never in production). Change one with `npm run staff:password -- admin "new-password"`, or from
   *Back office → Staff*. Setting a password signs that person out everywhere.
 - 5 wrong passwords in a minute locks that username for a minute on that computer.
-- **Kiosk (`http://localhost:5173/`)** has no login: a tablet is paired once. Sign in as `admin`,
+- **Website (`http://localhost:5173/`)** is the public landing page; its *Order now* button opens the kiosk.
+- **Kiosk (`http://localhost:5173/kiosk`)** has no login: a tablet is paired once. Sign in as `admin`,
   open *Back office → Kiosks → Register kiosk*, then type the 8-character code on the tablet
   (valid 15 minutes, works once). Signed-in managers can open the kiosk directly as a preview.
 - **Database logins** (in `Backend_Cafe-System/.env`, never committed):
@@ -69,7 +70,7 @@ Back it up first: `pg_dump "$MIGRATION_DATABASE_URL" > backup.sql`.
 | `npm run dev` | Start with auto-reload |
 | `npm run build` / `npm start` | Compile to `dist/` / run the build |
 | `npm run typecheck` | Type-check without emitting |
-| `npm test` | 78 integration tests against a throwaway `<db>_test` database, run as a restricted role |
+| `npm test` | 79 integration tests against a throwaway `<db>_test` database, run as a restricted role |
 | `npm run db:migrate` | Apply pending files in `db/migrations` |
 | `npm run db:seed` | Seed an empty database (menu, staff, suppliers, stock) |
 | `npm run db:dev-passwords` | Give placeholder accounts the dev password |
@@ -119,6 +120,7 @@ Every response carries `X-Request-Id` (also in the access log). API responses ar
 | Cashier | `GET /cashier/orders?status=`, `GET /cashier/orders/by-number/:n`, `GET /cashier/orders/:id` | cashier, admin |
 | | `POST /cashier/orders/:id/payment` `{ customerName, cashTendered }`, `POST /cashier/orders/:id/cancel` | cashier, admin |
 | | `GET /cashier/summary`, `GET /cashier/events` (SSE) | cashier, admin |
+| Order display | `GET /display` (today's preparing + ready: order number and first name only), `GET /display/events` (SSE) | public |
 | Board | `GET /board`, `POST /board/orders/:id/serve`, `POST /board/orders/complete` `{ orderIds }`, `GET /board/events` (SSE) | kitchen, cashier, admin |
 | Catalog | `GET/POST /admin/categories`, `PATCH /admin/categories/:id` | admin |
 | | `GET/POST /admin/products`, `GET/PATCH /admin/products/:id`, `PUT /admin/products/:id/recipe` | admin |
@@ -143,7 +145,7 @@ src/
   middlewares/                requestId, responseFormatter, authenticate, authorize,
                               rateLimit, validate, notFound, errorHandler
   modules/<feature>/          <feature>.routes → .controller → .service → .repository
-                              (+ .validator). Features: auth, kiosk, cashier, board, health,
+                              (+ .validator). Features: auth, kiosk, cashier, board, display, health,
                               admin/{catalog, inventory, suppliers, deliveries, staff, orders, reports, kiosks}
   realtime/                   hub (pub/sub), listener (LISTEN), sse (streams)
   jobs/expiryJob.ts           24-hour order expiry with leader election
